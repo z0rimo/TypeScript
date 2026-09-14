@@ -21,6 +21,7 @@ type Large =
     | undefined;
 
 type SmallBox = { value: Small };
+type DeletableSmallBox = { value?: Small };
 
 // Small union: fallback discriminant narrowing path.
 
@@ -59,6 +60,12 @@ if (boxAssignmentInRight.value!.type === (boxAssignmentInRight = boxReplacement,
     boxAssignmentInRight.value.type;
 }
 
+declare let boxDeleteInRight: DeletableSmallBox;
+if (boxDeleteInRight.value!.type === (delete boxDeleteInRight.value, "1")) {
+    // @ts-expect-error
+    const deletedValue: never = boxDeleteInRight.value;
+}
+
 declare let smallSwitch: Small;
 switch (smallSwitch!.type) {
     case "1":
@@ -79,6 +86,14 @@ switch (boxAssignmentInCase.value!.type) {
     case (boxAssignmentInCase = boxReplacement, "1"):
         // @ts-expect-error
         boxAssignmentInCase.value.type;
+        break;
+}
+
+declare let boxDeleteInCase: DeletableSmallBox;
+switch (boxDeleteInCase.value!.type) {
+    case (delete boxDeleteInCase.value, "1"):
+        // @ts-expect-error
+        boxDeleteInCase.value.type;
         break;
 }
 
