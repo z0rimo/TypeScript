@@ -20,6 +20,8 @@ type Large =
     | { type: "10" }
     | undefined;
 
+type SmallBox = { value: Small };
+
 // Small union: fallback discriminant narrowing path.
 
 declare let smallEqual: Small;
@@ -50,6 +52,13 @@ if (smallAssignmentInRight!.type === (smallAssignmentInRight = smallAssignmentVa
     smallAssignmentInRight.type;
 }
 
+declare let boxAssignmentInRight: SmallBox;
+declare let boxReplacement: SmallBox;
+if (boxAssignmentInRight.value!.type === (boxAssignmentInRight = boxReplacement, "1")) {
+    // @ts-expect-error
+    boxAssignmentInRight.value.type;
+}
+
 declare let smallSwitch: Small;
 switch (smallSwitch!.type) {
     case "1":
@@ -62,6 +71,14 @@ switch (smallAssignmentInCase!.type) {
     case (smallAssignmentInCase = undefined, "1"):
         // @ts-expect-error
         smallAssignmentInCase.type;
+        break;
+}
+
+declare let boxAssignmentInCase: SmallBox;
+switch (boxAssignmentInCase.value!.type) {
+    case (boxAssignmentInCase = boxReplacement, "1"):
+        // @ts-expect-error
+        boxAssignmentInCase.value.type;
         break;
 }
 

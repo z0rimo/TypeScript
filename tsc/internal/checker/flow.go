@@ -1858,7 +1858,7 @@ func (c *Checker) containsMatchingReference(source *ast.Node, target *ast.Node) 
 }
 
 func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
-	if ast.IsAssignmentTarget(node) && c.isMatchingReference(reference, node) {
+	if ast.IsAssignmentTarget(node) && c.isOrContainsMatchingReference(reference, node) {
 		return true
 	}
 	return node.ForEachChild(func(child *ast.Node) bool {
