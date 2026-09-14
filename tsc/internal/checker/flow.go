@@ -1865,14 +1865,41 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
 		return true
 	}
-	// Function bodies are deferred unless directly invoked. Accessors are conservatively scanned because a property access may invoke them;
-	// a generator invocation is still deferred because it only creates an iterator.
-	if ast.IsFunctionLike(node) && !ast.IsAccessor(node) && (!c.isImmediatelyInvokedFunction(node) || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
-		return false
+	if ast.IsFunctionLike(node) && !ast.IsAccessor(node) {
+		return c.functionLikeContainsMatchingAssignment(reference, node)
 	}
 	return node.ForEachChild(func(child *ast.Node) bool {
 		return c.containsMatchingAssignment(reference, child)
 	})
+}
+
+func (c *Checker) functionLikeContainsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
+	// Computed names and decorators are evaluated when the containing object or class is created.
+	if name := node.Name(); name != nil && ast.IsComputedPropertyName(name) && c.containsMatchingAssignment(reference, name.Expression()) {
+		return true
+	}
+	for _, decorator := range node.Decorators() {
+		if c.containsMatchingAssignment(reference, decorator) {
+			return true
+		}
+	}
+	for _, parameter := range node.Parameters() {
+		for _, decorator := range parameter.Decorators() {
+			if c.containsMatchingAssignment(reference, decorator) {
+				return true
+			}
+		}
+	}
+	if !c.isImmediatelyInvokedFunction(node) {
+		return false
+	}
+	for _, parameter := range node.Parameters() {
+		if c.containsMatchingAssignment(reference, parameter) {
+			return true
+		}
+	}
+	// Calling a generator evaluates its parameters but defers its body until the iterator advances.
+	return ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator == 0 && node.Body() != nil && c.containsMatchingAssignment(reference, node.Body())
 }
 
 func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {

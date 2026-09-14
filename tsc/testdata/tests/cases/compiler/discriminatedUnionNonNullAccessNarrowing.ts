@@ -143,6 +143,40 @@ if (getterAssignmentInRight!.type === ({
     getterAssignmentInRight.type;
 }
 
+declare let computedMethodAssignmentInRight: Small;
+if (computedMethodAssignmentInRight!.type === ({
+    [(computedMethodAssignmentInRight = smallAssignmentValue, "method")]() {},
+    value: "1" as const,
+}).value) {
+    // @ts-expect-error
+    computedMethodAssignmentInRight.type;
+}
+
+declare const methodDecorator: any;
+declare let decoratorAssignmentInRight: Small;
+if (decoratorAssignmentInRight!.type === (class {
+    @((decoratorAssignmentInRight = smallAssignmentValue), methodDecorator)
+    method() {}
+
+    static value = "1" as const;
+}).value) {
+    // @ts-expect-error
+    decoratorAssignmentInRight.type;
+}
+
+declare let generatorParameterAssignmentInRight: Small;
+if (generatorParameterAssignmentInRight!.type === ((function* (_value = (generatorParameterAssignmentInRight = smallAssignmentValue)) {})(), "1")) {
+    // @ts-expect-error
+    generatorParameterAssignmentInRight.type;
+}
+
+declare let deferredGeneratorBodyAssignmentInRight: Small;
+if (deferredGeneratorBodyAssignmentInRight!.type === ((function* () {
+    deferredGeneratorBodyAssignmentInRight = undefined;
+})(), "1")) {
+    deferredGeneratorBodyAssignmentInRight.type;
+}
+
 declare let asyncAssignmentInRight: Small;
 if (asyncAssignmentInRight!.type === (void (async () => { asyncAssignmentInRight = smallAssignmentValue; })(), "1")) {
     // @ts-expect-error
