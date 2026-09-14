@@ -1862,7 +1862,7 @@ func (c *Checker) containsMatchingReference(source *ast.Node, target *ast.Node) 
 
 func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
 	target := ast.SkipOuterExpressions(node, ast.OEKAssertions|ast.OEKParentheses)
-	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
+	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node) || node.Parent != nil && ast.IsDeleteExpression(node.Parent) && node.Parent.Expression() == node) && c.isOrContainsMatchingReference(reference, target) {
 		return true
 	}
 	if ast.IsFunctionLike(node) && !ast.IsAccessor(node) {
@@ -1903,7 +1903,10 @@ func (c *Checker) functionLikeContainsMatchingAssignment(reference *ast.Node, no
 }
 
 func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {
-	target := node
+	target := c.getImmediatelyInvokedFunctionTarget(node)
+	if target == nil {
+		return false
+	}
 	for {
 		for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
 			target = target.Parent
@@ -1932,6 +1935,46 @@ func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {
 			return false
 		}
 	}
+}
+
+func (c *Checker) getImmediatelyInvokedFunctionTarget(node *ast.Node) *ast.Node {
+	target := node
+	for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
+		target = target.Parent
+	}
+	if ast.IsFunctionExpressionOrArrowFunction(node) {
+		if target.Parent != nil && ast.IsPropertyAssignment(target.Parent) && target.Parent.Initializer() == target {
+			return c.getImmediatelyAccessedObjectLiteralMemberTarget(target.Parent)
+		}
+		return target
+	}
+	if ast.IsMethodDeclaration(node) && ast.IsObjectLiteralExpression(node.Parent) {
+		return c.getImmediatelyAccessedObjectLiteralMemberTarget(node)
+	}
+	if ast.IsConstructorDeclaration(node) && ast.IsClassExpression(node.Parent) {
+		return node.Parent
+	}
+	return nil
+}
+
+func (c *Checker) getImmediatelyAccessedObjectLiteralMemberTarget(member *ast.Node) *ast.Node {
+	target := member.Parent
+	for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
+		target = target.Parent
+	}
+	access := target.Parent
+	if !ast.IsAccessExpression(access) || access.Expression() != target {
+		return nil
+	}
+	memberName, ok := ast.TryGetTextOfPropertyName(member.Name())
+	if !ok {
+		return nil
+	}
+	accessName, ok := c.getAccessedPropertyName(access)
+	if !ok || accessName != memberName {
+		return nil
+	}
+	return access
 }
 
 func (c *Checker) switchClauseMayAssignReference(reference *ast.Node, data *ast.FlowSwitchClauseData) bool {

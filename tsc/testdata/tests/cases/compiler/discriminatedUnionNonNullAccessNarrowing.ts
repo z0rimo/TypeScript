@@ -177,6 +177,38 @@ if (deferredGeneratorBodyAssignmentInRight!.type === ((function* () {
     deferredGeneratorBodyAssignmentInRight.type;
 }
 
+declare let methodAssignmentInRight: Small;
+if (methodAssignmentInRight!.type === ({
+    method() {
+        methodAssignmentInRight = smallAssignmentValue;
+        return "1" as const;
+    },
+}).method()) {
+    // @ts-expect-error
+    methodAssignmentInRight.type;
+}
+
+declare let propertyFunctionAssignmentInRight: Small;
+if (propertyFunctionAssignmentInRight!.type === ({
+    method: function () {
+        propertyFunctionAssignmentInRight = smallAssignmentValue;
+        return "1" as const;
+    },
+}).method()) {
+    // @ts-expect-error
+    propertyFunctionAssignmentInRight.type;
+}
+
+declare let classConstructorAssignmentInRight: Small;
+if (classConstructorAssignmentInRight!.type === (new (class {
+    constructor() {
+        classConstructorAssignmentInRight = smallAssignmentValue;
+    }
+})(), "1")) {
+    // @ts-expect-error
+    classConstructorAssignmentInRight.type;
+}
+
 declare let asyncAssignmentInRight: Small;
 if (asyncAssignmentInRight!.type === (void (async () => { asyncAssignmentInRight = smallAssignmentValue; })(), "1")) {
     // @ts-expect-error
@@ -194,6 +226,13 @@ declare let boxDeleteInRight: DeletableSmallBox;
 if (boxDeleteInRight.value!.type === (delete boxDeleteInRight.value, "1")) {
     // @ts-expect-error
     const deletedValue: never = boxDeleteInRight.value;
+}
+
+declare let assertedBoxDeleteInRight: DeletableSmallBox;
+// @ts-expect-error
+if (assertedBoxDeleteInRight.value!.type === (delete (assertedBoxDeleteInRight.value as any), "1")) {
+    // @ts-expect-error
+    assertedBoxDeleteInRight.value.type;
 }
 
 declare let smallSwitch: Small;
@@ -238,6 +277,19 @@ switch (bindAssignmentInCase!.type) {
     }).bind(undefined)():
         // @ts-expect-error
         bindAssignmentInCase.type;
+        break;
+}
+
+declare let methodAssignmentInCase: Small;
+switch (methodAssignmentInCase!.type) {
+    case ({
+        method() {
+            methodAssignmentInCase = undefined;
+            return "1" as const;
+        },
+    }).method():
+        // @ts-expect-error
+        methodAssignmentInCase.type;
         break;
 }
 
