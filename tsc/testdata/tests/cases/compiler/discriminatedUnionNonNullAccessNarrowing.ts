@@ -43,10 +43,25 @@ if (smallNotEqual!.type !== "1") {
     smallNotEqual.type;
 }
 
+declare let smallAssignmentInRight: Small;
+declare let smallAssignmentValue: Small;
+if (smallAssignmentInRight!.type === (smallAssignmentInRight = smallAssignmentValue, "1")) {
+    // @ts-expect-error
+    smallAssignmentInRight.type;
+}
+
 declare let smallSwitch: Small;
 switch (smallSwitch!.type) {
     case "1":
         smallSwitch.type;
+        break;
+}
+
+declare let smallAssignmentInCase: Small;
+switch (smallAssignmentInCase!.type) {
+    case (smallAssignmentInCase = undefined, "1"):
+        // @ts-expect-error
+        smallAssignmentInCase.type;
         break;
 }
 

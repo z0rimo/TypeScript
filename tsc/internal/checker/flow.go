@@ -495,7 +495,7 @@ func (c *Checker) narrowTypeByBinaryExpression(f *FlowState, t *Type, expr *ast.
 		}
 		leftAccess := c.getDiscriminantPropertyAccess(f, left, t)
 		if leftAccess != nil {
-			if leftAccess == left && c.strictNullChecks && !ast.IsOptionalChain(leftAccess) && isNonNullAccess(leftAccess) && c.maybeTypeOfKind(t, TypeFlagsNullable) {
+			if leftAccess == left && c.strictNullChecks && !ast.IsOptionalChain(leftAccess) && isNonNullAccess(leftAccess) && !c.containsMatchingAssignment(f.reference, expr.Right) && c.maybeTypeOfKind(t, TypeFlagsNullable) {
 				t = c.getTypeWithFacts(t, TypeFactsNEUndefinedOrNull)
 			}
 			return c.narrowTypeByDiscriminantProperty(t, leftAccess, operator, right, assumeTrue)
@@ -1088,7 +1088,7 @@ func (c *Checker) getTypeAtSwitchClause(f *FlowState, flow *ast.FlowNode) FlowTy
 		}
 		access := c.getDiscriminantPropertyAccess(f, expr, t)
 		if access != nil {
-			if access == expr && c.strictNullChecks && !ast.IsOptionalChain(access) && isNonNullAccess(access) && c.maybeTypeOfKind(t, TypeFlagsNullable) {
+			if access == expr && c.strictNullChecks && !ast.IsOptionalChain(access) && isNonNullAccess(access) && !c.switchClauseMayAssignReference(f.reference, data) && c.maybeTypeOfKind(t, TypeFlagsNullable) {
 				t = c.getTypeWithFacts(t, TypeFactsNEUndefinedOrNull)
 			}
 			t = c.narrowTypeBySwitchOnDiscriminantProperty(t, access, data)
@@ -1855,6 +1855,26 @@ func (c *Checker) containsMatchingReference(source *ast.Node, target *ast.Node) 
 		}
 	}
 	return false
+}
+
+func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
+	if ast.IsAssignmentTarget(node) && c.isMatchingReference(reference, node) {
+		return true
+	}
+	return node.ForEachChild(func(child *ast.Node) bool {
+		return c.containsMatchingAssignment(reference, child)
+	})
+}
+
+func (c *Checker) switchClauseMayAssignReference(reference *ast.Node, data *ast.FlowSwitchClauseData) bool {
+	clauses := data.SwitchStatement.AsSwitchStatement().CaseBlock.AsCaseBlock().Clauses.Nodes
+	clauseEnd := int(data.ClauseEnd)
+	if data.IsEmpty() || core.Some(clauses[data.ClauseStart:data.ClauseEnd], func(clause *ast.Node) bool { return clause.Kind == ast.KindDefaultClause }) {
+		clauseEnd = len(clauses)
+	}
+	return core.Some(clauses[:clauseEnd], func(clause *ast.Node) bool {
+		return clause.Kind == ast.KindCaseClause && c.containsMatchingAssignment(reference, clause.Expression())
+	})
 }
 
 func (c *Checker) optionalChainContainsReference(source *ast.Node, target *ast.Node) bool {
