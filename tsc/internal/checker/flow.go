@@ -1868,6 +1868,11 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 	if ast.IsFunctionLike(node) && !ast.IsAccessor(node) {
 		return c.functionLikeContainsMatchingAssignment(reference, node)
 	}
+	// Normal traversal observes evaluation of the callee and arguments. Resolve inline callees separately
+	// to visit parameters and bodies that the function-like case above intentionally defers.
+	if c.invokedFunctionContainsMatchingAssignment(reference, node) {
+		return true
+	}
 	return node.ForEachChild(func(child *ast.Node) bool {
 		return c.containsMatchingAssignment(reference, child)
 	})
@@ -1890,9 +1895,27 @@ func (c *Checker) functionLikeContainsMatchingAssignment(reference *ast.Node, no
 			}
 		}
 	}
-	if !c.isImmediatelyInvokedFunction(node) {
+	return false
+}
+
+func (c *Checker) invokedFunctionContainsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
+	var callee *ast.Node
+	construct := false
+	switch {
+	case ast.IsCallExpression(node), ast.IsNewExpression(node):
+		callee = node.Expression()
+		construct = ast.IsNewExpression(node)
+	case ast.IsTaggedTemplateExpression(node):
+		callee = node.AsTaggedTemplateExpression().Tag
+	default:
 		return false
 	}
+	return c.forEachInvokedFunction(callee, construct, func(fn *ast.Node) bool {
+		return c.invokedFunctionLikeContainsMatchingAssignment(reference, fn)
+	})
+}
+
+func (c *Checker) invokedFunctionLikeContainsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
 	for _, parameter := range node.Parameters() {
 		if c.containsMatchingAssignment(reference, parameter) {
 			return true
@@ -1902,79 +1925,87 @@ func (c *Checker) functionLikeContainsMatchingAssignment(reference *ast.Node, no
 	return ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator == 0 && node.Body() != nil && c.containsMatchingAssignment(reference, node.Body())
 }
 
-func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {
-	target := c.getImmediatelyInvokedFunctionTarget(node)
-	if target == nil {
+func (c *Checker) forEachInvokedFunction(callee *ast.Node, construct bool, visit func(*ast.Node) bool) bool {
+	callee = ast.SkipOuterExpressions(callee, ast.OEKAll)
+	switch {
+	case ast.IsFunctionExpressionOrArrowFunction(callee):
+		return visit(callee)
+	case ast.IsClassExpression(callee):
+		if construct {
+			return core.Some(callee.Members(), func(member *ast.Node) bool {
+				return ast.IsConstructorDeclaration(member) && visit(member)
+			})
+		}
+	case ast.IsConditionalExpression(callee):
+		expr := callee.AsConditionalExpression()
+		return c.forEachInvokedFunction(expr.WhenTrue, construct, visit) || c.forEachInvokedFunction(expr.WhenFalse, construct, visit)
+	case ast.IsBinaryExpression(callee):
+		expr := callee.AsBinaryExpression()
+		switch {
+		case expr.OperatorToken.Kind == ast.KindCommaToken || ast.IsAssignmentExpression(callee, false /*excludeCompoundAssignment*/):
+			return c.forEachInvokedFunction(expr.Right, construct, visit)
+		case ast.IsLogicalOrCoalescingBinaryExpression(callee):
+			return c.forEachInvokedFunction(expr.Left, construct, visit) || c.forEachInvokedFunction(expr.Right, construct, visit)
+		}
+	case ast.IsAccessExpression(callee):
+		if name, ok := c.getAccessedPropertyName(callee); ok && (name == "call" || name == "apply") {
+			return c.forEachInvokedFunction(callee.Expression(), false /*construct*/, visit)
+		}
+		return c.forEachInvokedObjectMember(callee, visit)
+	case ast.IsCallExpression(callee):
+		access := ast.SkipOuterExpressions(callee.Expression(), ast.OEKAll)
+		if ast.IsAccessExpression(access) {
+			if name, ok := c.getAccessedPropertyName(access); ok && name == "bind" {
+				return c.forEachInvokedFunction(access.Expression(), construct, visit)
+			}
+		}
+	}
+	return false
+}
+
+func (c *Checker) forEachInvokedObjectMember(access *ast.Node, visit func(*ast.Node) bool) bool {
+	name, ok := c.getAccessedPropertyName(access)
+	if !ok {
 		return false
 	}
-	for {
-		for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
-			target = target.Parent
-		}
-		parent := target.Parent
-		if (ast.IsCallExpression(parent) || ast.IsNewExpression(parent)) && parent.Expression() == target ||
-			ast.IsTaggedTemplateExpression(parent) && parent.AsTaggedTemplateExpression().Tag == target {
-			return true
-		}
-		if !ast.IsAccessExpression(parent) || parent.Expression() != target {
+	receiver := ast.SkipOuterExpressions(access.Expression(), ast.OEKAll)
+	if ast.IsNewExpression(receiver) {
+		receiver = ast.SkipOuterExpressions(receiver.Expression(), ast.OEKAll)
+		if !ast.IsClassExpression(receiver) {
 			return false
 		}
-		name, ok := c.getAccessedPropertyName(parent)
-		if !ok {
-			return false
-		}
-		switch name {
-		case "call", "apply":
-			target = parent
-		case "bind":
-			if !ast.IsCallExpression(parent.Parent) || parent.Parent.Expression() != parent {
-				return false
-			}
-			target = parent.Parent
-		default:
-			return false
-		}
+		return c.forEachMatchingInvokedMember(receiver.Members(), name, false /*staticOnly*/, visit)
 	}
+	switch {
+	case ast.IsObjectLiteralExpression(receiver):
+		return c.forEachMatchingInvokedMember(receiver.Properties(), name, false /*staticOnly*/, visit)
+	case ast.IsClassExpression(receiver):
+		return c.forEachMatchingInvokedMember(receiver.Members(), name, true /*staticOnly*/, visit)
+	}
+	return false
 }
 
-func (c *Checker) getImmediatelyInvokedFunctionTarget(node *ast.Node) *ast.Node {
-	target := node
-	for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
-		target = target.Parent
-	}
-	if ast.IsFunctionExpressionOrArrowFunction(node) {
-		if target.Parent != nil && ast.IsPropertyAssignment(target.Parent) && target.Parent.Initializer() == target {
-			return c.getImmediatelyAccessedObjectLiteralMemberTarget(target.Parent)
+func (c *Checker) forEachMatchingInvokedMember(members []*ast.Node, name string, staticOnly bool, visit func(*ast.Node) bool) bool {
+	return core.Some(members, func(member *ast.Node) bool {
+		if staticOnly && !ast.HasStaticModifier(member) {
+			return false
 		}
-		return target
-	}
-	if ast.IsMethodDeclaration(node) && ast.IsObjectLiteralExpression(node.Parent) {
-		return c.getImmediatelyAccessedObjectLiteralMemberTarget(node)
-	}
-	if ast.IsConstructorDeclaration(node) && ast.IsClassExpression(node.Parent) {
-		return node.Parent
-	}
-	return nil
-}
-
-func (c *Checker) getImmediatelyAccessedObjectLiteralMemberTarget(member *ast.Node) *ast.Node {
-	target := member.Parent
-	for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
-		target = target.Parent
-	}
-	access := target.Parent
-	if !ast.IsAccessExpression(access) || access.Expression() != target {
-		return nil
-	}
-	memberName, ok := ast.TryGetTextOfPropertyName(member.Name())
-	if !ok {
-		return nil
-	}
-	accessName, ok := c.getAccessedPropertyName(access)
-	if !ok || accessName != memberName {
-		return nil
-	}
-	return access
+		nameNode := member.Name()
+		if nameNode == nil {
+			return false
+		}
+		memberName, ok := ast.TryGetTextOfPropertyName(nameNode)
+		if !ok || memberName != name {
+			return false
+		}
+		switch {
+		case ast.IsMethodDeclaration(member):
+			return visit(member)
+		case ast.IsPropertyAssignment(member), ast.IsPropertyDeclaration(member):
+			return member.Initializer() != nil && c.forEachInvokedFunction(member.Initializer(), false /*construct*/, visit)
+		}
+		return false
+	})
 }
 
 func (c *Checker) switchClauseMayAssignReference(reference *ast.Node, data *ast.FlowSwitchClauseData) bool {

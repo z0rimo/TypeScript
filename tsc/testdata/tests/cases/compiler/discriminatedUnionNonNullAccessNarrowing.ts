@@ -199,6 +199,45 @@ if (propertyFunctionAssignmentInRight!.type === ({
     propertyFunctionAssignmentInRight.type;
 }
 
+declare let commaCalleeAssignmentInRight: Small;
+if (commaCalleeAssignmentInRight!.type === (smallAssignmentValue = smallAssignmentValue, (() => {
+    commaCalleeAssignmentInRight = smallAssignmentValue;
+    return "1" as const;
+}))()) {
+    // @ts-expect-error
+    commaCalleeAssignmentInRight.type;
+}
+
+declare let assignmentCalleeAssignmentInRight: Small;
+let assignedFunction: () => "1";
+if (assignmentCalleeAssignmentInRight!.type === (assignedFunction = () => {
+    assignmentCalleeAssignmentInRight = smallAssignmentValue;
+    return "1" as const;
+})()) {
+    // @ts-expect-error
+    assignmentCalleeAssignmentInRight.type;
+}
+
+declare const calleeCondition: boolean;
+declare let conditionalCalleeAssignmentInRight: Small;
+if (conditionalCalleeAssignmentInRight!.type === (calleeCondition ? (() => {
+    conditionalCalleeAssignmentInRight = smallAssignmentValue;
+    return "1" as const;
+}) : (() => "1" as const))()) {
+    // @ts-expect-error
+    conditionalCalleeAssignmentInRight.type;
+}
+
+declare let existingFunction: (() => "1") | undefined;
+declare let logicalCalleeAssignmentInRight: Small;
+if (logicalCalleeAssignmentInRight!.type === (existingFunction || (() => {
+    logicalCalleeAssignmentInRight = smallAssignmentValue;
+    return "1" as const;
+}))()) {
+    // @ts-expect-error
+    logicalCalleeAssignmentInRight.type;
+}
+
 declare let classConstructorAssignmentInRight: Small;
 if (classConstructorAssignmentInRight!.type === (new (class {
     constructor() {
@@ -207,6 +246,19 @@ if (classConstructorAssignmentInRight!.type === (new (class {
 })(), "1")) {
     // @ts-expect-error
     classConstructorAssignmentInRight.type;
+}
+
+declare let classMethodAssignmentInRight: Small;
+if (classMethodAssignmentInRight!.type === (new (class {
+    constructor() {}
+
+    method() {
+        classMethodAssignmentInRight = smallAssignmentValue;
+        return "1" as const;
+    }
+})()).method()) {
+    // @ts-expect-error
+    classMethodAssignmentInRight.type;
 }
 
 declare let asyncAssignmentInRight: Small;
