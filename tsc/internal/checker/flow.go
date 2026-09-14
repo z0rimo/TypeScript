@@ -1862,12 +1862,28 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
 		return true
 	}
-	if ast.IsFunctionLike(node) && (ast.GetImmediatelyInvokedFunctionExpression(node) == nil || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
+	if ast.IsFunctionLike(node) && (!c.isImmediatelyInvokedFunction(node) || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
 		return false
 	}
 	return node.ForEachChild(func(child *ast.Node) bool {
 		return c.containsMatchingAssignment(reference, child)
 	})
+}
+
+func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {
+	target := node
+	for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) {
+		target = target.Parent
+	}
+	if ast.IsCallExpression(target.Parent) && target.Parent.Expression() == target {
+		return true
+	}
+	access := target.Parent
+	if ast.IsAccessExpression(access) && access.Expression() == target {
+		name, ok := c.getAccessedPropertyName(access)
+		return ok && (name == "call" || name == "apply") && ast.IsCallExpression(access.Parent) && access.Parent.Expression() == access
+	}
+	return false
 }
 
 func (c *Checker) switchClauseMayAssignReference(reference *ast.Node, data *ast.FlowSwitchClauseData) bool {
