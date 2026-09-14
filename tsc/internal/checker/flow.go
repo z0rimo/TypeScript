@@ -1862,7 +1862,7 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
 		return true
 	}
-	if ast.IsFunctionLike(node) && (ast.GetImmediatelyInvokedFunctionExpression(node) == nil || ast.GetFunctionFlags(node)&(ast.FunctionFlagsAsync|ast.FunctionFlagsGenerator) != 0) {
+	if ast.IsFunctionLike(node) && (ast.GetImmediatelyInvokedFunctionExpression(node) == nil || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
 		return false
 	}
 	return node.ForEachChild(func(child *ast.Node) bool {

@@ -79,6 +79,12 @@ if (invokedAssignmentInRight!.type === (() => {
     invokedAssignmentInRight.type;
 }
 
+declare let asyncAssignmentInRight: Small;
+if (asyncAssignmentInRight!.type === (void (async () => { asyncAssignmentInRight = smallAssignmentValue; })(), "1")) {
+    // @ts-expect-error
+    asyncAssignmentInRight.type;
+}
+
 declare let boxAssignmentInRight: SmallBox;
 declare let boxReplacement: SmallBox;
 if (boxAssignmentInRight.value!.type === (boxAssignmentInRight = boxReplacement, "1")) {
@@ -104,6 +110,14 @@ switch (smallAssignmentInCase!.type) {
     case (smallAssignmentInCase = undefined, "1"):
         // @ts-expect-error
         smallAssignmentInCase.type;
+        break;
+}
+
+declare let asyncAssignmentInCase: Small;
+switch (asyncAssignmentInCase!.type) {
+    case (void (async () => { asyncAssignmentInCase = undefined; })(), "1"):
+        // @ts-expect-error
+        asyncAssignmentInCase.type;
         break;
 }
 
