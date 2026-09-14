@@ -97,6 +97,24 @@ if (callAssignmentInRight!.type === (() => {
     callAssignmentInRight.type;
 }
 
+declare let bindAssignmentInRight: Small;
+if (bindAssignmentInRight!.type === (() => {
+    bindAssignmentInRight = smallAssignmentValue;
+    return "1";
+}).bind(undefined)()) {
+    // @ts-expect-error
+    bindAssignmentInRight.type;
+}
+
+declare let bindCallAssignmentInRight: Small;
+if (bindCallAssignmentInRight!.type === (() => {
+    bindCallAssignmentInRight = smallAssignmentValue;
+    return "1";
+}).bind(undefined).call(undefined)) {
+    // @ts-expect-error
+    bindCallAssignmentInRight.type;
+}
+
 declare let asyncAssignmentInRight: Small;
 if (asyncAssignmentInRight!.type === (void (async () => { asyncAssignmentInRight = smallAssignmentValue; })(), "1")) {
     // @ts-expect-error
@@ -147,6 +165,17 @@ switch (applyAssignmentInCase!.type) {
     }).apply(undefined):
         // @ts-expect-error
         applyAssignmentInCase.type;
+        break;
+}
+
+declare let bindAssignmentInCase: Small;
+switch (bindAssignmentInCase!.type) {
+    case (() => {
+        bindAssignmentInCase = undefined;
+        return "1";
+    }).bind(undefined)():
+        // @ts-expect-error
+        bindAssignmentInCase.type;
         break;
 }
 

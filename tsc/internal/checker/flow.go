@@ -495,6 +495,8 @@ func (c *Checker) narrowTypeByBinaryExpression(f *FlowState, t *Type, expr *ast.
 		}
 		leftAccess := c.getDiscriminantPropertyAccess(f, left, t)
 		if leftAccess != nil {
+			// The right operand is evaluated after a left discriminant access and may invalidate its non-null fact.
+			// A right discriminant access is evaluated last, so no corresponding mutation check is needed below.
 			if leftAccess == left && c.strictNullChecks && !ast.IsOptionalChain(leftAccess) && isNonNullAccess(leftAccess) && !c.containsMatchingAssignment(f.reference, expr.Right) && c.maybeTypeOfKind(t, TypeFlagsNullable) {
 				t = c.getTypeWithFacts(t, TypeFactsNEUndefinedOrNull)
 			}
@@ -1088,6 +1090,7 @@ func (c *Checker) getTypeAtSwitchClause(f *FlowState, flow *ast.FlowNode) FlowTy
 		}
 		access := c.getDiscriminantPropertyAccess(f, expr, t)
 		if access != nil {
+			// Case expressions are evaluated after the switch expression and may invalidate its non-null fact.
 			if access == expr && c.strictNullChecks && !ast.IsOptionalChain(access) && isNonNullAccess(access) && !c.switchClauseMayAssignReference(f.reference, data) && c.maybeTypeOfKind(t, TypeFlagsNullable) {
 				t = c.getTypeWithFacts(t, TypeFactsNEUndefinedOrNull)
 			}
@@ -1862,6 +1865,7 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
 		return true
 	}
+	// Function bodies are deferred unless directly invoked. A generator invocation only creates an iterator.
 	if ast.IsFunctionLike(node) && (!c.isImmediatelyInvokedFunction(node) || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
 		return false
 	}
@@ -1872,18 +1876,33 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 
 func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {
 	target := node
-	for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) {
-		target = target.Parent
+	for {
+		for target.Parent != nil && ast.IsOuterExpression(target.Parent, ast.OEKAll) && target.Parent.Expression() == target {
+			target = target.Parent
+		}
+		parent := target.Parent
+		if ast.IsCallExpression(parent) && parent.Expression() == target {
+			return true
+		}
+		if !ast.IsAccessExpression(parent) || parent.Expression() != target {
+			return false
+		}
+		name, ok := c.getAccessedPropertyName(parent)
+		if !ok {
+			return false
+		}
+		switch name {
+		case "call", "apply":
+			target = parent
+		case "bind":
+			if !ast.IsCallExpression(parent.Parent) || parent.Parent.Expression() != parent {
+				return false
+			}
+			target = parent.Parent
+		default:
+			return false
+		}
 	}
-	if ast.IsCallExpression(target.Parent) && target.Parent.Expression() == target {
-		return true
-	}
-	access := target.Parent
-	if ast.IsAccessExpression(access) && access.Expression() == target {
-		name, ok := c.getAccessedPropertyName(access)
-		return ok && (name == "call" || name == "apply") && ast.IsCallExpression(access.Parent) && access.Parent.Expression() == access
-	}
-	return false
 }
 
 func (c *Checker) switchClauseMayAssignReference(reference *ast.Node, data *ast.FlowSwitchClauseData) bool {
