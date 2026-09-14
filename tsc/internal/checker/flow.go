@@ -1858,8 +1858,12 @@ func (c *Checker) containsMatchingReference(source *ast.Node, target *ast.Node) 
 }
 
 func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node) bool {
-	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, node) {
+	target := ast.SkipOuterExpressions(node, ast.OEKAssertions|ast.OEKParentheses)
+	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
 		return true
+	}
+	if ast.IsFunctionLike(node) && (ast.GetImmediatelyInvokedFunctionExpression(node) == nil || ast.GetFunctionFlags(node)&(ast.FunctionFlagsAsync|ast.FunctionFlagsGenerator) != 0) {
+		return false
 	}
 	return node.ForEachChild(func(child *ast.Node) bool {
 		return c.containsMatchingAssignment(reference, child)

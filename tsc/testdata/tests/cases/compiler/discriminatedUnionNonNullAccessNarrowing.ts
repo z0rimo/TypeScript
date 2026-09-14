@@ -53,6 +53,32 @@ if (smallAssignmentInRight!.type === (smallAssignmentInRight = smallAssignmentVa
     smallAssignmentInRight.type;
 }
 
+declare let asAssignmentInRight: Small;
+if (asAssignmentInRight!.type === ((asAssignmentInRight as Small | undefined) = smallAssignmentValue, "1")) {
+    // @ts-expect-error
+    asAssignmentInRight.type;
+}
+
+declare let typeAssertionAssignmentInRight: Small;
+if (typeAssertionAssignmentInRight!.type === ((<Small | undefined> typeAssertionAssignmentInRight) = smallAssignmentValue, "1")) {
+    // @ts-expect-error
+    typeAssertionAssignmentInRight.type;
+}
+
+declare let deferredAssignmentInRight: Small;
+if (deferredAssignmentInRight!.type === (void (() => { deferredAssignmentInRight = undefined; }), "1")) {
+    deferredAssignmentInRight.type;
+}
+
+declare let invokedAssignmentInRight: Small;
+if (invokedAssignmentInRight!.type === (() => {
+    invokedAssignmentInRight = smallAssignmentValue;
+    return "1";
+})()) {
+    // @ts-expect-error
+    invokedAssignmentInRight.type;
+}
+
 declare let boxAssignmentInRight: SmallBox;
 declare let boxReplacement: SmallBox;
 if (boxAssignmentInRight.value!.type === (boxAssignmentInRight = boxReplacement, "1")) {
