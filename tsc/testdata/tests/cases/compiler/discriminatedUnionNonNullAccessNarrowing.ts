@@ -115,6 +115,34 @@ if (bindCallAssignmentInRight!.type === (() => {
     bindCallAssignmentInRight.type;
 }
 
+declare let taggedAssignmentInRight: Small;
+if (taggedAssignmentInRight!.type === (function (_strings: TemplateStringsArray) {
+    taggedAssignmentInRight = smallAssignmentValue;
+    return "1";
+})``) {
+    // @ts-expect-error
+    taggedAssignmentInRight.type;
+}
+
+declare let constructorAssignmentInRight: Small;
+if (constructorAssignmentInRight!.type === (new ((function () {
+    constructorAssignmentInRight = smallAssignmentValue;
+}) as unknown as new () => object)(), "1")) {
+    // @ts-expect-error
+    constructorAssignmentInRight.type;
+}
+
+declare let getterAssignmentInRight: Small;
+if (getterAssignmentInRight!.type === ({
+    get value() {
+        getterAssignmentInRight = smallAssignmentValue;
+        return "1";
+    },
+}).value) {
+    // @ts-expect-error
+    getterAssignmentInRight.type;
+}
+
 declare let asyncAssignmentInRight: Small;
 if (asyncAssignmentInRight!.type === (void (async () => { asyncAssignmentInRight = smallAssignmentValue; })(), "1")) {
     // @ts-expect-error

@@ -1865,8 +1865,9 @@ func (c *Checker) containsMatchingAssignment(reference *ast.Node, node *ast.Node
 	if (ast.IsAssignmentTarget(node) || isDeleteTarget(node)) && c.isOrContainsMatchingReference(reference, target) {
 		return true
 	}
-	// Function bodies are deferred unless directly invoked. A generator invocation only creates an iterator.
-	if ast.IsFunctionLike(node) && (!c.isImmediatelyInvokedFunction(node) || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
+	// Function bodies are deferred unless directly invoked. Accessors are conservatively scanned because a property access may invoke them;
+	// a generator invocation is still deferred because it only creates an iterator.
+	if ast.IsFunctionLike(node) && !ast.IsAccessor(node) && (!c.isImmediatelyInvokedFunction(node) || ast.GetFunctionFlags(node)&ast.FunctionFlagsGenerator != 0) {
 		return false
 	}
 	return node.ForEachChild(func(child *ast.Node) bool {
@@ -1881,7 +1882,8 @@ func (c *Checker) isImmediatelyInvokedFunction(node *ast.Node) bool {
 			target = target.Parent
 		}
 		parent := target.Parent
-		if ast.IsCallExpression(parent) && parent.Expression() == target {
+		if (ast.IsCallExpression(parent) || ast.IsNewExpression(parent)) && parent.Expression() == target ||
+			ast.IsTaggedTemplateExpression(parent) && parent.AsTaggedTemplateExpression().Tag == target {
 			return true
 		}
 		if !ast.IsAccessExpression(parent) || parent.Expression() != target {
